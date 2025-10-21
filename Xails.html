@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Xails — Chat</title>
+  <style>
+    :root{--bg:#0f1720;--card:#0b1220;--accent:#7c3aed;--muted:#99a1b3;--text:#e6eef8}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial;background:linear-gradient(180deg,#071021 0%,#071822 60%);color:var(--text)}
+    .app{max-width:980px;margin:0 auto;padding:12px;display:flex;flex-direction:column;height:100vh}
+    header{display:flex;align-items:center;gap:12px}
+    .logo{display:flex;align-items:center;gap:10px}
+    .logo .dot{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,var(--accent),#3b82f6);display:inline-block}
+    h1{font-size:18px;margin:0}
+    main{flex:1;display:flex;flex-direction:column;margin-top:10px}
+
+    .tabs{display:flex;background:transparent;border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+    .tab{flex:1;padding:10px;text-align:center;cursor:pointer;background:rgba(255,255,255,0.02);border:none;color:var(--muted);font-weight:600}
+    .tab.active{background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));color:var(--text)}
+
+    .page{display:none;flex-direction:column;height:100%}
+    .page.active{display:flex}
+
+    .chat-layout{display:flex;gap:12px;height:100%;margin-top:12px}
+    .left-col{width:320px;min-width:220px;display:flex;flex-direction:column;gap:10px}
+    .card{background:var(--card);border-radius:12px;padding:12px}
+    .search{padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text)}
+    .user-list{overflow:auto;max-height:56vh}
+    .user-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;cursor:pointer}
+    .user-item:hover{background:rgba(255,255,255,0.02)}
+
+    .right-col{flex:1;display:flex;flex-direction:column}
+    .chat-window{flex:1;background:var(--card);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;overflow:hidden}
+    .messages{flex:1;overflow:auto;padding-right:6px}
+    .msg{max-width:75%;padding:8px 10px;border-radius:10px;margin-bottom:8px;word-wrap:break-word}
+    .msg.you{background:linear-gradient(90deg,rgba(124,58,237,0.15),rgba(59,130,246,0.06));align-self:flex-end}
+    .msg.other{background:rgba(255,255,255,0.03);align-self:flex-start}
+    .meta{font-size:11px;color:var(--muted);margin-bottom:6px}
+    .composer{display:flex;gap:8px;margin-top:8px}
+    .composer input[type=text]{flex:1;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text)}
+    .composer button{padding:10px 14px;border-radius:12px;border:none;background:var(--accent);color:white;font-weight:700}
+
+    .small-btn{padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:var(--text);cursor:pointer}
+
+    .overlay{position:fixed;inset:0;background:linear-gradient(180deg,rgba(2,6,23,0.6),rgba(2,6,23,0.85));display:flex;align-items:center;justify-content:center;padding:12px}
+    .auth-box{width:100%;max-width:520px;background:#08111b;border-radius:12px;padding:18px}
+
+    footer{font-size:13px;color:var(--muted);text-align:center;margin-top:8px}
+
+    @media(max-width:900px){.left-col{width:40%;min-width:140px}.chat-layout{flex-direction:column}.left-col{order:2}.right-col{order:1}}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="logo"><div class="dot"></div><div><h1>Xails</h1><div style="font-size:12px;color:var(--muted)">Private chat • Firebase</div></div></div>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        <div id="userNameDisplay" style="color:var(--muted);font-size:13px"></div>
+      </div>
+    </header>
+
+    <main>
+      <div class="tabs">
+        <button class="tab active" data-tab="chat">CHAT</button>
+        <button class="tab" data-tab="friends">FRIENDS</button>
+        <button class="tab" data-tab="settings">SETTINGS</button>
+        <button class="tab" data-tab="plus">PLUS</button>
+      </div>
+
+      <!-- CHAT PAGE -->
+      <section id="chat" class="page active">
+        <div class="chat-layout">
+          <div class="left-col">
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                <strong>Friends</strong>
+                <button id="btnAddFriend" class="small-btn">Add friend</button>
+              </div>
+              <input id="searchFriends" class="search" placeholder="Search friends..." />
+              <div class="user-list" id="friendsList"></div>
+            </div>
+          </div>
+
+          <div class="right-col">
+            <div class="card" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <div id="chatHeader"><strong>Choose a friend to start</strong></div>
+              <div id="chatSub" style="color:var(--muted);font-size:13px"></div>
+            </div>
+
+            <div class="chat-window">
+              <div class="messages" id="messages"></div>
+              <div class="composer">
+                <input id="msgInput" type="text" placeholder="Write a message..." autocomplete="off" />
+                <button id="sendBtn">Send</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FRIENDS PAGE -->
+      <section id="friends" class="page">
+        <div style="display:flex;gap:12px;margin-top:12px;flex-direction:column">
+          <div class="card">
+            <strong>Find users</strong>
+            <input id="searchUsers" class="search" placeholder="Search users by name or email..." style="margin-top:8px" />
+            <div id="allUsers" class="user-list" style="margin-top:8px"></div>
+          </div>
+
+          <div class="card">
+            <strong>Incoming friend requests</strong>
+            <div id="incomingRequests" class="user-list" style="margin-top:8px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SETTINGS PAGE -->
+      <section id="settings" class="page">
+        <div class="card" style="margin-top:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <strong>Account settings</strong>
+            <button id="signOutBtn" class="small-btn">Sign out</button>
+          </div>
+          <label for="displayName">Display name</label>
+          <input id="displayName" type="text" placeholder="Your display name" />
+          <button id="saveProfile" class="small-btn" style="margin-top:8px">Save</button>
+
+          <hr style="border:none;border-top:1px solid rgba(255,255,255,0.03);margin:12px 0" />
+          <div style="font-size:13px;color:var(--muted)">Danger zone</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="deleteAccount" class="small-btn">Delete account</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PLUS PAGE -->
+      <section id="plus" class="page">
+        <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+          <div class="card">
+            <div style="font-weight:700">Xails • Plus</div>
+            <div style="color:var(--muted);margin-top:8px">You will be redirected to an external page.</div>
+            <div style="margin-top:12px"><a id="plusLink" href="https://sites.google.com/view/xails-plus" target="_blank" rel="noopener noreferrer" class="small-btn">Go to PLUS</a></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <footer>Built with MarianINC Engine — Xails</footer>
+  </div>
+
+  <!-- AUTH OVERLAY -->
+  <div id="authOverlay" class="overlay" style="display:none">
+    <div class="auth-box">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <strong style="font-size:16px">Sign in to Xails</strong>
+        <small style="color:var(--muted)">Firebase required</small>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button id="showSignIn" class="small-btn" style="flex:1">Sign in</button>
+        <button id="showSignUp" class="small-btn" style="flex:1">Sign up</button>
+      </div>
+
+      <div id="signInForm">
+        <input id="emailSignIn" type="email" placeholder="Email" />
+        <input id="passwordSignIn" type="password" placeholder="Password" />
+        <button id="doSignIn" style="width:100%;margin-top:8px" class="small-btn">Sign in</button>
+      </div>
+
+      <div id="signUpForm" style="display:none">
+        <input id="emailSignUp" type="email" placeholder="Email" />
+        <input id="passwordSignUp" type="password" placeholder="Password (≥6)" />
+        <input id="pseudoSignUp" type="text" placeholder="Display name" />
+        <button id="doSignUp" style="width:100%;margin-top:8px" class="small-btn">Create account</button>
+      </div>
+
+      <div style="font-size:12px;color:var(--muted);margin-top:10px">Replace <code>firebaseConfig</code> below with your Firebase config.</div>
+    </div>
+  </div>
+
+  <script type="module">
+    // --- Replace with your Firebase config ---
+    // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+	const firebaseConfig = {
+  	apiKey: "AIzaSyBsHXFp_J6K2PuMhQoaPZS79BdDeEDJ64c",
+  	authDomain: "xails-c6d03.firebaseapp.com",
+  	projectId: "xails-c6d03",
+  	storageBucket: "xails-c6d03.firebasestorage.app",
+  	messagingSenderId: "1023332861431",
+ 	 appId: "1:1023332861431:web:8aa4b35c2e26fab79edaf2",
+ 	 measurementId: "G-KF8SGFGEXK"
+    };
+
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, updateProfile, deleteUser } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js';
+    import { getFirestore, collection, addDoc, setDoc, doc, getDoc, getDocs, query, where, orderBy, limit, onSnapshot, serverTimestamp, updateDoc, arrayUnion, arrayRemove } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js';
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // UI refs
+    const tabs = document.querySelectorAll('.tab');
+    const pages = document.querySelectorAll('.page');
+    const messagesEl = document.getElementById('messages');
+    const msgInput = document.getElementById('msgInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const authOverlay = document.getElementById('authOverlay');
+    const userNameDisplay = document.getElementById('userNameDisplay');
+
+    const showSignInBtn = document.getElementById('showSignIn');
+    const showSignUpBtn = document.getElementById('showSignUp');
+    const signInForm = document.getElementById('signInForm');
+    const signUpForm = document.getElementById('signUpForm');
+
+    const emailSignIn = document.getElementById('emailSignIn');
+    const passwordSignIn = document.getElementById('passwordSignIn');
+    const doSignIn = document.getElementById('doSignIn');
+
+    const emailSignUp = document.getElementById('emailSignUp');
+    const passwordSignUp = document.getElementById('passwordSignUp');
+    const pseudoSignUp = document.getElementById('pseudoSignUp');
+    const doSignUp = document.getElementById('doSignUp');
+
+    const signOutBtn = document.getElementById('signOutBtn');
+    const displayNameInput = document.getElementById('displayName');
+    const saveProfileBtn = document.getElementById('saveProfile');
+    const deleteAccountBtn = document.getElementById('deleteAccount');
+
+    const friendsList = document.getElementById('friendsList');
+    const searchFriends = document.getElementById('searchFriends');
+    const btnAddFriend = document.getElementById('btnAddFriend');
+
+    const allUsersEl = document.getElementById('allUsers');
+    const searchUsers = document.getElementById('searchUsers');
+    const incomingRequestsEl = document.getElementById('incomingRequests');
+
+    const chatHeader = document.getElementById('chatHeader');
+    const chatSub = document.getElementById('chatSub');
+
+    // Tab switching
+    tabs.forEach(t=>t.addEventListener('click',()=>{
+      tabs.forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      const target = t.dataset.tab;
+      pages.forEach(p=>p.classList.remove('active'));
+      document.getElementById(target).classList.add('active');
+    }));
+
+    // Auth UI
+    showSignInBtn.addEventListener('click',()=>{signInForm.style.display='block';signUpForm.style.display='none'});
+    showSignUpBtn.addEventListener('click',()=>{signInForm.style.display='none';signUpForm.style.display='block'});
+
+    doSignIn.addEventListener('click',async()=>{try{await signInWithEmailAndPassword(auth,emailSignIn.value,passwordSignIn.value);}catch(e){alert('Sign in error: '+e.message)}});
+
+    doSignUp.addEventListener('click',async()=>{
+      try{
+        const userCred = await createUserWithEmailAndPassword(auth,emailSignUp.value,passwordSignUp.value);
+        const user = userCred.user;
+        if(pseudoSignUp.value) await updateProfile(user,{displayName:pseudoSignUp.value});
+        // create user doc in Firestore
+        await setDoc(doc(db,'users',user.uid),{
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || '',
+          createdAt: serverTimestamp(),
+          friends: []
+        });
+      }catch(e){alert('Sign up error: '+e.message)}
+    });
+
+    signOutBtn.addEventListener('click',async()=>{await signOut(auth)});
+
+    saveProfileBtn.addEventListener('click',async()=>{
+      const user = auth.currentUser;
+      if(!user) return alert('Not signed in');
+      try{
+        await updateProfile(user,{displayName:displayNameInput.value});
+        await updateDoc(doc(db,'users',user.uid),{displayName:displayNameInput.value});
+        alert('Profile updated');
+      }catch(e){alert('Error: '+e.message)}
+    });
+
+    deleteAccountBtn.addEventListener('click',async()=>{
+      const user = auth.currentUser;
+      if(!user) return alert('Not signed in');
+      if(!confirm('Delete your account permanently?')) return;
+      try{
+        // remove user doc (best effort)
+        await updateDoc(doc(db,'users',user.uid),{deleted:true});
+        await deleteUser(user);
+        alert('Account deleted');
+      }catch(e){alert('Error: '+e.message+' (you may need to re-authenticate)')}
+    });
+
+    // Friends & users
+    let currentUser = null;
+    let currentFriend = null; // {uid, displayName}
+    let unsubscribeMessages = null;
+
+    // helper to render user item
+    function makeUserItem({uid,displayName,email}, buttonsHtml=''){
+      const div = document.createElement('div'); div.className='user-item';
+      div.innerHTML = `<div><strong>${displayName||email}</strong><div style="font-size:12px;color:var(--muted)">${email}</div></div><div>${buttonsHtml}</div>`;
+      return div;
+    }
+
+    async function loadAllUsers(){
+      const q = query(collection(db,'users'), limit(200));
+      const snap = await getDocs(q);
+      const users = snap.docs.map(d=>d.data()).filter(u=>u.uid!==currentUser.uid);
+      return users;
+    }
+
+    async function renderAllUsers(filter=''){
+      allUsersEl.innerHTML = 'Loading...';
+      const users = await loadAllUsers();
+      const lower = filter.toLowerCase();
+      allUsersEl.innerHTML = '';
+      users.filter(u=> (u.displayName||'').toLowerCase().includes(lower) || (u.email||'').toLowerCase().includes(lower) ).forEach(u=>{
+        // check friend request state
+        const btn = document.createElement('button'); btn.className='small-btn'; btn.textContent='Add';
+        btn.addEventListener('click',()=>sendFriendRequest(u.uid));
+        const item = makeUserItem(u,'');
+        item.querySelector('div:last-child').appendChild(btn);
+        allUsersEl.appendChild(item);
+      });
+      if(allUsersEl.innerHTML==='') allUsersEl.textContent='No users found';
+    }
+
+    searchUsers.addEventListener('input',e=>{renderAllUsers(e.target.value)});
+    btnAddFriend.addEventListener('click',()=>{ tabs.forEach(t=>t.dataset.tab==='friends' && t.click()); });
+
+    // Friend requests
+    async function sendFriendRequest(toUid){
+      try{
+        await addDoc(collection(db,'friendRequests'),{from: currentUser.uid, to: toUid, status: 'pending', createdAt: serverTimestamp()});
+        alert('Friend request sent');
+      }catch(e){alert('Error sending request: '+e.message)}
+    }
+
+    // render incoming requests
+    function renderIncomingRequests(docs){
+      incomingRequestsEl.innerHTML='';
+      docs.forEach(docSnap=>{
+        const data = docSnap.data();
+        if(data.to !== currentUser.uid) return;
+        const userRef = doc(db,'users',data.from);
+        getDoc(userRef).then(uSnap=>{
+          const u = uSnap.data();
+          const acceptBtn = document.createElement('button'); acceptBtn.className='small-btn'; acceptBtn.textContent='Accept';
+          const declineBtn = document.createElement('button'); declineBtn.className='small-btn'; declineBtn.style.marginLeft='6px'; declineBtn.textContent='Decline';
+          acceptBtn.addEventListener('click',()=>acceptFriendRequest(docSnap.id,data.from));
+          declineBtn.addEventListener('click',()=>declineFriendRequest(docSnap.id));
+          const item = makeUserItem(u,'');
+          const container = item.querySelector('div:last-child'); container.appendChild(acceptBtn); container.appendChild(declineBtn);
+          incomingRequestsEl.appendChild(item);
+        });
+      });
+      if(incomingRequestsEl.innerHTML==='') incomingRequestsEl.textContent='No incoming requests';
+    }
+
+    async function acceptFriendRequest(requestId, fromUid){
+      try{
+        // add each other to friends array
+        await updateDoc(doc(db,'users',currentUser.uid),{friends: arrayUnion(fromUid)});
+        await updateDoc(doc(db,'users',fromUid),{friends: arrayUnion(currentUser.uid)});
+        // mark request as accepted (or delete)
+        await updateDoc(doc(db,'friendRequests',requestId),{status:'accepted'});
+        alert('Friend added');
+      }catch(e){alert('Error: '+e.message)}
+    }
+    async function declineFriendRequest(requestId){
+      try{ await updateDoc(doc(db,'friendRequests',requestId),{status:'declined'}); alert('Request declined'); }catch(e){alert('Error: '+e.message)}
+    }
+
+    // listen for friend requests where to == currentUser.uid
+    let unsubscribeRequests = null;
+    function listenFriendRequests(){
+      if(unsubscribeRequests) unsubscribeRequests();
+      const q = query(collection(db,'friendRequests'), where('to','==',currentUser.uid));
+      unsubscribeRequests = onSnapshot(q,snap=>{ renderIncomingRequests(snap.docs); });
+    }
+
+    // render friends list
+    async function renderFriendsList(filter=''){
+      friendsList.innerHTML = 'Loading...';
+      const userDoc = await getDoc(doc(db,'users',currentUser.uid));
+      const userData = userDoc.data();
+      const friendUids = userData.friends || [];
+      friendsList.innerHTML = '';
+      if(friendUids.length===0){ friendsList.textContent='No friends yet'; return; }
+      for(const uid of friendUids){
+        const uSnap = await getDoc(doc(db,'users',uid));
+        const u = uSnap.data();
+        if(!u) continue;
+        if(filter && !((u.displayName||'').toLowerCase().includes(filter.toLowerCase()) || (u.email||'').toLowerCase().includes(filter.toLowerCase()))) continue;
+        const openBtn = document.createElement('button'); openBtn.className='small-btn'; openBtn.textContent='Open';
+        openBtn.addEventListener('click',()=>openChatWith(u));
+        const item = makeUserItem(u,'');
+        item.querySelector('div:last-child').appendChild(openBtn);
+        friendsList.appendChild(item);
+      }
+    }
+    searchFriends.addEventListener('input',e=>renderFriendsList(e.target.value));
+
+    // Chat mechanics
+    function conversationId(a,b){ return [a,b].sort().join('_'); }
+
+    async function openChatWith(userObj){
+      currentFriend = userObj;
+      chatHeader.innerHTML = `<strong>${userObj.displayName||userObj.email}</strong>`;
+      chatSub.textContent = userObj.email || '';
+      // load messages
+      if(unsubscribeMessages) unsubscribeMessages();
+      const convId = conversationId(currentUser.uid, userObj.uid);
+      const q = query(collection(db,'conversations',convId,'messages'), orderBy('createdAt'));
+      unsubscribeMessages = onSnapshot(q,snap=>{
+        messagesEl.innerHTML='';
+        snap.docs.forEach(d=>{
+          const m = d.data();
+          const who = m.from===currentUser.uid ? 'you' : 'other';
+          const div = document.createElement('div'); div.className='msg '+who;
+          const meta = document.createElement('div'); meta.className='meta';
+          meta.textContent = (m.fromName||'') + ' • ' + (m.createdAt ? new Date(m.createdAt.seconds*1000).toLocaleTimeString() : '—');
+          const txt = document.createElement('div'); txt.textContent = m.text || '';
+          div.appendChild(meta); div.appendChild(txt); messagesEl.appendChild(div);
+        });
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      });
+    }
+
+    async function sendMessage(){
+      const text = msgInput.value.trim(); if(!text) return alert('Empty message');
+      if(!currentFriend) return alert('Select a friend first');
+      try{
+        const convId = conversationId(currentUser.uid, currentFriend.uid);
+        await addDoc(collection(db,'conversations',convId,'messages'),{
+          from: currentUser.uid,
+          fromName: currentUser.displayName || currentUser.email,
+          to: currentFriend.uid,
+          text: text,
+          createdAt: serverTimestamp()
+        });
+        msgInput.value='';
+      }catch(e){alert('Send error: '+e.message)}
+    }
+
+    sendBtn.addEventListener('click',sendMessage);
+    msgInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); sendMessage(); } });
+
+    // Auth state handling
+    onAuthStateChanged(auth, async user=>{
+      if(user){
+        currentUser = user;
+        // ensure user doc exists
+        const uref = doc(db,'users',user.uid);
+        const udoc = await getDoc(uref);
+        if(!udoc.exists()){
+          await setDoc(uref,{uid:user.uid,email:user.email,displayName:user.displayName||'',createdAt:serverTimestamp(),friends:[]});
+        }
+        authOverlay.style.display='none';
+        userNameDisplay.textContent = user.displayName || user.email;
+        displayNameInput.value = user.displayName || '';
+        renderFriendsList();
+        renderAllUsers('');
+        if(unsubscribeRequests) unsubscribeRequests();
+        listenFriendRequests();
+      } else {
+        currentUser = null; currentFriend = null;
+        userNameDisplay.textContent = '';
+        displayNameInput.value = '';
+        if(unsubscribeMessages) {unsubscribeMessages(); unsubscribeMessages=null}
+        if(unsubscribeRequests) {unsubscribeRequests(); unsubscribeRequests=null}
+        authOverlay.style.display='flex';
+      }
+    });
+
+    // listen to friendRequests collection changes to update lists globally (optional)
+    onSnapshot(collection(db,'friendRequests'),()=>{ if(currentUser) renderAllUsers(searchUsers.value||''); });
+
+    // Notes & Firestore rules reminder
+    // Firestore rules should require auth. Example rule (publish):
+    // service cloud.firestore { match /databases/{database}/documents { match /{document=**} { allow read, write: if request.auth != null; } } }
+
+  </script>
+</body>
+</html>

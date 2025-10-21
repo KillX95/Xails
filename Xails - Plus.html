@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Xails - Plus</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: Arial, sans-serif; background: #fafafa; margin: 0; }
+    header { background: white; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); font-weight: bold; display: flex; justify-content: space-between; align-items: center; }
+    #feed { max-width: 600px; margin: 20px auto; background: white; padding: 20px; border-radius: 10px; }
+    .post { border: 1px solid #ddd; border-radius: 8px; margin-top: 15px; padding: 10px; }
+    img, video { width: 100%; border-radius: 8px; margin-top: 10px; }
+    button#topPostBtn { width: auto; padding: 8px 15px; background: #0095f6; color: white; border: none; border-radius: 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    Xails - Plus
+    <button id="topPostBtn">Post</button>
+  </header>
+
+  <div id="feed"></div>
+
+  <script>
+    const AIRTABLE_API_KEY = "patVKNkkEoGHCiCos.e5dae0f929f34549e30f827359decd01e4901ffc3130b4c32dd7fbe04ea04737";
+    const AIRTABLE_BASE_ID = "appVyOuuM6ibaW6Hp";
+    const TABLE_NAME = "Posts";
+
+    async function loadPosts() {
+      const res = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${TABLE_NAME}`, {
+        headers: { "Authorization": `Bearer ${AIRTABLE_API_KEY}` }
+      });
+      const data = await res.json();
+      const feed = document.getElementById("feed");
+      feed.innerHTML = "";
+
+      // On inverse les records pour que les derniers apparaissent en haut
+      const records = data.records.reverse();
+
+      records.forEach(post => {
+        const p = post.fields;
+        const el = document.createElement("div");
+        el.className = "post";
+
+        let mediaHTML = "";
+        if (p.Media && Array.isArray(p.Media) && p.Media.length > 0 && p.Media[0].url) {
+          const url = p.Media[0].url;
+          if (url.endsWith(".mp4")) {
+            mediaHTML = `<video src="${url}" controls></video>`;
+          } else {
+            mediaHTML = `<img src="${url}" alt="media">`;
+          }
+        }
+
+        el.innerHTML = `
+          <h4>${p.Title || ""}</h4>
+          <p>${p.Description || ""}</p>
+          ${mediaHTML}
+          <small>${p.Timestamp ? new Date(p.Timestamp).toLocaleString() : ""}</small>
+        `;
+        feed.appendChild(el);
+      });
+    }
+
+    loadPosts();
+
+    // Bouton Post renvoie sur Google Sites
+    document.getElementById("topPostBtn").onclick = () => {
+      window.location.href = "https://sites.google.com/view/newpostxails";
+    };
+  </script>
+</body>
+</html>
